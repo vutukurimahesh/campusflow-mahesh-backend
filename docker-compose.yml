@@ -1,0 +1,20 @@
+# Local PostgreSQL only. Run: docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: campusflow-db
+    environment:
+      POSTGRES_DB: campusflow
+      POSTGRES_USER: campusflow
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-campusflow}
+    ports:
+      - "5432:5432"
+    volumes:
+      - campusflow-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusflow -d campusflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  campusflow-data:
