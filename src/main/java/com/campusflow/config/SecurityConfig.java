@@ -1,3 +1,4 @@
+
 package com.campusflow.config;
 
 import com.campusflow.exception.ErrorResponse;
@@ -23,7 +24,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -31,20 +31,22 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
-    private final String allowedOrigins;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
                           @Value("${app.cors.allowed-origins}") String allowedOrigins) {
         this.jwtAuthFilter = jwtAuthFilter;
-        this.allowedOrigins = allowedOrigins;
     }
 
-    /** The JWT filter lives only inside the Spring Security chain; stop Boot from also registering it globally. */
+    /**
+     * Prevent Spring Boot from registering the JWT filter twice.
+     */
     @Bean
-    public FilterRegistrationBean<JwtAuthFilter> jwtFilterRegistration(JwtAuthFilter filter) {
-        FilterRegistrationBean<JwtAuthFilter> reg = new FilterRegistrationBean<>(filter);
-        reg.setEnabled(false);
-        return reg;
+    public FilterRegistrationBean<JwtAuthFilter> jwtFilterRegistration(
+            JwtAuthFilter filter) {
+        FilterRegistrationBean<JwtAuthFilter> registration =
+                new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
@@ -54,47 +56,89 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule())
+        ObjectMapper mapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(c -> c.configurationSource(corsConfigurationSource()))
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(a -> a
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/health", "/api/v1/health", "/api/v1/auth/**").permitAll()
+                        .requestMatchers(
+                                "/health",
+                                "/api/v1/health",
+                                "/api/v1/auth/**"
+                        ).permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().denyAll())
-                .exceptionHandling(e -> e
-                        .authenticationEntryPoint((req, res, ex) -> {
-                            res.setStatus(401);
-                            res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            mapper.writeValue(res.getWriter(), ErrorResponse.of(401, "Unauthorized", "Authentication required"));
+                        .anyRequest().denyAll()
+                )
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, ex) -> {
+                            response.setStatus(401);
+                            response.setContentType(
+                                    MediaType.APPLICATION_JSON_VALUE);
+                            mapper.writeValue(
+                                    response.getWriter(),
+                                    ErrorResponse.of(
+                                            401,
+                                            "Unauthorized",
+                                            "Authentication required"
+                                    )
+                            );
                         })
-                        .accessDeniedHandler((req, res, ex) -> {
-                            res.setStatus(403);
-                            res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            mapper.writeValue(res.getWriter(), ErrorResponse.of(403, "Forbidden", "Access denied"));
-                        }))
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                        .accessDeniedHandler((request, response, ex) -> {
+                            response.setStatus(403);
+                            response.setContentType(
+                                    MediaType.APPLICATION_JSON_VALUE);
+                            mapper.writeValue(
+                                    response.getWriter(),
+                                    ErrorResponse.of(
+                                            403,
+                                            "Forbidden",
+                                            "Access denied"
+                                    )
+                            );
+                        })
+                )
+                .addFilterBefore(
+                        jwtAuthFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
+
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration cfg = new CorsConfiguration();
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(s -> s.endsWith("/") ? s.substring(0, s.length() - 1) : s)
-                .toList();
-        cfg.setAllowedOrigins(origins);
-        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        cfg.setMaxAge(3600L);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", cfg);
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOriginPatterns(List.of(
+                "https://campusflow-mahesh-frontend.onrender.com",
+                "http://localhost:5173"
+        ));
+
+        config.setAllowedMethods(List.of(
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "OPTIONS"
+        ));
+
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 }
