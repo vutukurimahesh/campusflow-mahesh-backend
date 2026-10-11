@@ -1,4 +1,4 @@
-```dockerfile
+
 FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /workspace
@@ -21,4 +21,3 @@ USER appuser
 EXPOSE 8080
 
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=60", "-XX:+UseSerialGC", "-jar", "/app/app.jar"]
-```
